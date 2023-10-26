@@ -97,6 +97,6 @@ for alpha in alphas:
 
     plt.plot(knn_nums, accuracies)
     plt.xlabel('Number of Neighbors (K)')
-    plt.ylabel('Accuracy of alpha={alpha}')
+    plt.ylabel(f'Accuracy of alpha={alpha}')
     plt.title(f'Accuracy vs. Number of Neighbors for alpha={alpha}')
     plt.show()
