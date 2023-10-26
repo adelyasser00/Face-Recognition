@@ -56,6 +56,8 @@ training_standarized = (training_data - training_mean) / training_std
 
 covariance_matrix = np.cov(training_standarized.T)
 eigenvalues, eigenvectors = np.linalg.eig(covariance_matrix)
+eigenvalues = eigenvalues.real
+eigenvectors = eigenvectors.real
 
 # index to sort the eigen values and eigen vectors in decreasing order of eigen values
 idx = np.argsort(eigenvalues)[::-1]
