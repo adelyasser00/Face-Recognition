@@ -42,61 +42,91 @@ D = np.array(D)
 y = np.array(y)
 
 # 3) Split the data-set into Training and Test sets
-training_data = D[::2]
-testing_data = D[1::2]
+num_images = D.shape[0]
+rng_idx = np.random.permutation(num_images)
+split= 0.5
+split_idx = int(num_images * split)
+training_data = D[rng_idx[:split_idx]]
+testing_data = D[rng_idx[split_idx:]]
 
-training_labels = y[::2]
-testing_labels = y[1::2]
+training_labels = y[rng_idx[:split_idx]]
+testing_labels = y[rng_idx[split_idx:]]
 
 # 4) Classification using PCA
 # Calculate Projection Matrix U
 training_mean = np.mean(training_data, axis=0)
 training_std = np.std(training_data, axis=0)
-training_standarized = (training_data - training_mean) / training_std
+training_centered = training_data - training_mean
+covariance_matrix = np.cov(training_centered.T)
 
-covariance_matrix = np.cov(training_standarized.T)
+"""12 minute operation on T4 GPU"""
+
 eigenvalues, eigenvectors = np.linalg.eig(covariance_matrix)
+
+"""Continue 4)"""
+
 eigenvalues = eigenvalues.real
 eigenvectors = eigenvectors.real
 
 # index to sort the eigen values and eigen vectors in decreasing order of eigen values
 idx = np.argsort(eigenvalues)[::-1]
-sorted_eigenvalues = eigenvectors[idx]
+sorted_eigenvalues = eigenvalues[idx]
 sorted_eigenvectors = eigenvectors[:, idx]
 
 # sum to get the variance fraction to choose how many dimension aka how many eigen vectors
 cumulative_sum = np.cumsum(sorted_eigenvalues)
 
 # alpha=[0.8,0.85,0.9,0.95]    loop on the array and mark accuracy
+#consider single alpha for now
 alphas = [0.8, 0.85, 0.9, 0.95]  # for example
 
 for alpha in alphas:
-    num_eigenvectors = np.where(cumulative_sum >= alpha)[0][0] + 1
-    # final eigen vectors chosen for projection
-    U = sorted_eigenvectors[:, :num_eigenvectors]
+  # alpha = 0.8
+  # Compute the total variance
+  total_variance = np.sum(sorted_eigenvalues)
 
-    # project all the data on the eigen vectors
-    D_train_pca = np.dot(training_data, U)
-    D_test_pca = np.dot(testing_data, U)
+  # Compute the cumulative sum of the sorted eigenvalues
+  cumulative_variance = np.cumsum(sorted_eigenvalues)
 
-    # training: fitting the points on the graph so the classifier can classify any new testing point
-    # 5) Classifier Tuning
-    knn_nums = [1, 3, 5, 7]
-    accuracies = []
-    for knn_num in knn_nums:
-        knn = KNeighborsClassifier(n_neighbors=knn_num, weights='distance')
-        knn.fit(D_train_pca, training_labels)
+  # Compute the cumulative proportion of the total variance
+  cumulative_proportion = cumulative_variance / total_variance
+  print(np.where(cumulative_proportion >= alpha)[0][0])
 
-        # testing
-        predicted_labels = knn.predict(D_test_pca)
+  num_eigenvectors = np.where(cumulative_proportion >= alpha)[0][0] + 1
+  # final eigen vectors chosen for projection
 
-        # accuracy
-        accuracy = accuracy_score(testing_labels, predicted_labels)
-        accuracies.append(accuracy)
-        print(f'Accuracy of alpha={alpha}, K={knn_num}: {accuracy}')
+  projected_eigenvectors = sorted_eigenvectors[:,:num_eigenvectors]
+  print(len(projected_eigenvectors))
+  print(len(eigenvectors))
+  D_train_pca = training_centered.dot(projected_eigenvectors)
+  #TODO: remember to move testing mean and centered
+  testing_mean = np.mean(testing_data, axis=0)
+  testing_centered = testing_data - testing_mean
+  D_test_pca = testing_centered.dot(projected_eigenvectors)
+  # U = sorted_eigenvectors[:, :num_eigenvectors]
 
-    plt.plot(knn_nums, accuracies)
-    plt.xlabel('Number of Neighbors (K)')
-    plt.ylabel(f'Accuracy of alpha={alpha}')
-    plt.title(f'Accuracy vs. Number of Neighbors for alpha={alpha}')
-    plt.show()
+  # project all the data on the eigen vectors
+  # D_train_pca = np.dot(training_data, U)
+  # D_test_pca = np.dot(testing_data, U)
+
+  # training: fitting the points on the graph so the classifier can classify any new testing point
+  # 5) Classifier Tuning
+  knn_nums = [1, 3, 5, 7]
+  accuracies = []
+  for knn_num in knn_nums:
+      knn = KNeighborsClassifier(n_neighbors=knn_num, weights='distance')
+      knn.fit(D_train_pca, training_labels)
+
+      # testing
+      predicted_labels = knn.predict(D_test_pca)
+
+      # accuracy
+      accuracy = accuracy_score(testing_labels, predicted_labels)
+      accuracies.append(accuracy)
+      print(f'Accuracy of alpha={alpha}, K={knn_num}: {accuracy}')
+
+  plt.plot(knn_nums, accuracies)
+  plt.xlabel('Number of Neighbors (K)')
+  plt.ylabel(f'Accuracy of alpha={alpha}')
+  plt.title(f'Accuracy vs. Number of Neighbors for alpha={alpha}')
+  plt.show()
